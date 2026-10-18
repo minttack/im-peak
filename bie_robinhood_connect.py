@@ -186,6 +186,7 @@ class BrowserCallback:
                     if key in query and query[key]:
                         outer.result[key] = query[key][0]
                 outer.done.set()
+                print("BIE ROBINHOOD: OAuth callback captured on localhost", flush=True)
                 self.send_response(200 if "code" in outer.result else 400)
                 self.send_header("Content-Type", "text/plain; charset=utf-8")
                 self.end_headers()
@@ -204,8 +205,13 @@ class BrowserCallback:
         self.worker.start()
 
     async def wait(self):
-        accepted = await asyncio.to_thread(self.done.wait, 900)
-        if not accepted:
+        # Poll the cross-thread event explicitly. This avoids Windows executor
+        # edge cases observed where the HTTP handler served the success page
+        # but asyncio.to_thread(Event.wait) did not resume before its timeout.
+        deadline = asyncio.get_running_loop().time() + 900
+        while not self.done.is_set() and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(.1)
+        if not self.done.is_set():
             raise TimeoutError("Robinhood authorization was not finished in fifteen minutes")
         if "error" in self.result:
             raise RuntimeError("Robinhood denied authorization")
