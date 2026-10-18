@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "purpose": "Proposal-only controls for reviewing one small long option; no order submission",
+  "live_orders_enabled": false,
+  "options_enabled": false,
+  "maximum_account_risk_usd": "20.00",
+  "maximum_new_debit_per_day_usd": "5.00",
+  "maximum_single_debit_usd": "5.00",
+  "maximum_quote_age_seconds": 60,
+  "maximum_bid_ask_spread_fraction": "0.35",
+  "minimum_days_to_expiration": 1,
+  "allowed_action": "BUY_TO_OPEN",
+  "allowed_quantity": 1,
+  "allowed_multiplier": 100,
+  "allowed_option_types": ["call", "put"]
+}
