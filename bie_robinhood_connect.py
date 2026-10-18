@@ -204,9 +204,9 @@ class BrowserCallback:
         self.worker.start()
 
     async def wait(self):
-        accepted = await asyncio.to_thread(self.done.wait, 300)
+        accepted = await asyncio.to_thread(self.done.wait, 900)
         if not accepted:
-            raise TimeoutError("Robinhood authorization was not finished in five minutes")
+            raise TimeoutError("Robinhood authorization was not finished in fifteen minutes")
         if "error" in self.result:
             raise RuntimeError("Robinhood denied authorization")
         code = self.result.get("code")
@@ -255,7 +255,7 @@ async def connect(symbols: tuple[str, ...], watch: bool) -> None:
             print("Browser launch was not confirmed. Use the manual address above.", flush=True)
 
     async def finish_login():
-        print("Waiting for Robinhood browser authorization (up to 5 minutes)...")
+        print("Waiting for Robinhood browser authorization (up to 15 minutes)...")
         return await cb.wait()
 
     try:
