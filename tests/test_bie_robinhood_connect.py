@@ -7,6 +7,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import bie_robinhood_connect as c
 
 class ReadOnlyTest(unittest.TestCase):
+    def test_fixed_readonly_call_known_signature(self):
+        self.assertEqual(
+            c.fixed_readonly_quote_arguments(("SPY", "QQQ")),
+            {"symbols": ["SPY", "QQQ"]},
+        )
+
+    def test_fixed_readonly_call_validates_tickers(self):
+        with self.assertRaises(ValueError):
+            c.fixed_readonly_quote_arguments(("SPY", "../BAD"))
+
     def test_only_quote_tool_is_allowlisted(self):
         self.assertEqual(c.READ_ONLY_ALLOWLIST, frozenset(("get_equity_quotes",)))
         self.assertNotIn("place_option_order", c.READ_ONLY_ALLOWLIST)
