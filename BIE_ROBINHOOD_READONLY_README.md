@@ -33,9 +33,14 @@ against live Robinhood servers in this development environment.
 - Writes raw quote snapshots to
   **.bie_runtime/robinhood_quotes_latest.json**; writes connection state
   to **.bie_runtime/robinhood_connection_status.json**.
-- These are RAW read-only outputs. The old H140 strategy does **not yet
-  ingest** these JSON quotes or issue live predictions on them. Receipt time
-  is not evidence of a real-time market timestamp.
+- The raw response remains in `robinhood_quotes_latest.json`. A separate
+  prospective evidence bridge normalizes explicit symbol/price fields into
+  `.bie_runtime/market_evidence.json`, preserves the raw snapshot SHA-256,
+  provider and receipt timestamps, missing symbols, and freshness warnings.
+- Point-in-time quotes are never relabeled as completed daily OHLCV. H140 model
+  fitting still requires reviewed daily history through its existing importer.
+- A prediction can be frozen only from a BIE H140 prediction packet labeled
+  `NO_TRADE_RESEARCH`; a later timestamped observation resolves its Brier score.
 - No options orders, stock orders, cash moves, or trade approvals changes.
   No credentials are stored. It may prompt OAuth each start.
 - It is a standalone prototype: no unattended restart, no permanent
@@ -55,10 +60,8 @@ Trade approvals OFF means **other authorized external agents** may place
 eligible real trades without each-order approval. This connector never sends
 orders but cannot disable or stop those other agents.
 
-If authorization succeeds, the next separate step is validating the
-quote payloads/timestamps and feeding sanitized normalized historical/live
-observations into BIE's existing research engine; that has NOT been
-implemented by this connector. Real trades require a separate, independently
-tested order router and confirmed options eligibility, reconciled positions,
-pending orders, and enforceable $20 account-risk limits. With only $20,
-small options could still lose all premium quickly. No promises of profit.
+The quote evidence bridge and disabled execution boundary are covered by the
+offline regression suite. Real trades still require freshly verified options
+eligibility, buying power, positions, pending orders, approval status, and a
+separately reviewed order-capable implementation. With only $20, small options
+could still lose all premium quickly. No promises of profit.

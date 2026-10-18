@@ -47,7 +47,7 @@ def status(state: str, detail: str = "") -> None:
         "details": detail,
         "live_orders_enabled": False,
         "connection_type": "separate read-only OAuth session",
-        "model_integration": "raw quote snapshot only; no H140 prediction hook",
+        "model_integration": "timestamped quote evidence journal; completed daily OHLCV remains required for H140 fitting",
     })
     print(f"BIE ROBINHOOD: {state} {detail}", flush=True)
 
@@ -309,6 +309,13 @@ async def connect(symbols: tuple[str, ...], watch: bool) -> None:
                                 "raw_quote_response": result.model_dump(mode="json"),
                                 "warning": "Timestamp is receipt time; quotes may be delayed or stale. Research-only data, no orders.",
                             })
+                            # Local evidence bridge only. A malformed quote can never
+                            # broaden MCP permissions or trigger a brokerage action.
+                            try:
+                                from bie_market_monitor import ingest_quote_snapshot
+                                ingest_quote_snapshot(SNAPSHOT, RUNTIME / "market_evidence.json")
+                            except Exception as exc:
+                                print("BIE evidence journal rejected this snapshot: " + type(exc).__name__, flush=True)
                             status("CONNECTED_READONLY", f"Quote snapshot saved to {SNAPSHOT}")
                     except Exception:
                         status("READONLY_WAITING", "Quote request failed; check connection")

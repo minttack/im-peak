@@ -25,7 +25,7 @@ class SafetyTest(unittest.TestCase):
     def test_policy(self):
         p = load_policy()
         self.assertEqual(p["starting_budget_usd"], "20.00")
-        self.assertEqual(p["daily_new_buy_limit_usd"], "2.00")
+        self.assertEqual(p["daily_new_buy_limit_usd"], "5.00")
         self.assertFalse(p["live_orders_enabled"])
     def test_valid_paper_only(self):
         r = assess_paper_buy(**self.k)
@@ -35,11 +35,11 @@ class SafetyTest(unittest.TestCase):
         self.stop.touch()
         self.check("EMERGENCY_STOP")
     def test_order_limit(self):
-        self.check("OVER_SINGLE_BUY_LIMIT", notional_usd="2.01")
+        self.check("OVER_SINGLE_BUY_LIMIT", notional_usd="5.01")
     def test_cumulative_daily_filled(self):
-        self.check("OVER_DAILY_BUY_LIMIT", filled_buys_today_usd="1.50")
+        self.check("OVER_DAILY_BUY_LIMIT", filled_buys_today_usd="4.50")
     def test_cumulative_daily_pending(self):
-        self.check("OVER_DAILY_BUY_LIMIT", pending_buys_today_usd="1.10")
+        self.check("OVER_DAILY_BUY_LIMIT", pending_buys_today_usd="4.10")
     def test_cannot_overdraw(self):
         self.check("INSUFFICIENT_CASH", available_cash_usd="0.10")
     def test_total_budget(self):
