@@ -17,8 +17,9 @@ from pathlib import Path
 SYMBOLS = frozenset(("META", "MSFT", "XOM", "AMZN", "JNJ", "SPY", "QQQ"))
 SYMBOL_KEYS = ("symbol", "ticker", "instrument_symbol")
 PRICE_KEYS = ("mark_price", "last_trade_price", "last_price", "price")
-TIME_KEYS = ("updated_at", "last_trade_time", "timestamp", "as_of")
+TIME_KEYS = ("venue_last_trade_time", "last_trade_time", "updated_at", "timestamp", "as_of")
 SCHEMA = 1
+NORMALIZER_VERSION = 2
 
 
 def _time(value):
@@ -61,6 +62,7 @@ def normalize_quotes(snapshot):
     if not isinstance(requested, list) or not requested or not set(requested) <= SYMBOLS:
         raise ValueError("unexpected requested symbols")
     found = {}
+    quality = {}
     for item in _walk(snapshot.get("raw_quote_response")):
         symbol = next((item.get(k) for k in SYMBOL_KEYS if item.get(k)), None)
         if not isinstance(symbol, str) or symbol.upper() not in requested:
@@ -82,9 +84,16 @@ def normalize_quotes(snapshot):
                     warnings.append("provider_timestamp_future_or_stale")
             except (TypeError, ValueError):
                 warnings.append("provider_timestamp_invalid")
-        found[symbol] = {"symbol": symbol, "price_usd": _price(item[price_key]),
-                         "price_field": price_key, "provider_timestamp_utc": provider_utc,
-                         "received_at_utc": received.isoformat(), "warnings": warnings}
+        # Responses can contain separate current-quote and historical-close
+        # records for one symbol. Keep the most specific current quote field;
+        # traversal order must never let generic ``price`` overwrite a trade.
+        rank = {"price": 1, "last_price": 2, "mark_price": 3,
+                "last_trade_price": 4}[price_key]
+        if rank > quality.get(symbol, 0):
+            quality[symbol] = rank
+            found[symbol] = {"symbol": symbol, "price_usd": _price(item[price_key]),
+                             "price_field": price_key, "provider_timestamp_utc": provider_utc,
+                             "received_at_utc": received.isoformat(), "warnings": warnings}
     missing = sorted(set(requested) - set(found))
     return [found[s] for s in sorted(found)], missing
 
@@ -113,16 +122,24 @@ def ingest_quote_snapshot(snapshot_path, journal_path):
     snapshot = json.loads(raw)
     quotes, missing = normalize_quotes(snapshot)
     doc = _read_store(journal_path)
-    if any(row["snapshot_sha256"] == digest for row in doc["quotes"]):
+    previous = next((row for row in doc["quotes"] if row["snapshot_sha256"] == digest), None)
+    if previous is not None and previous.get("normalizer_version") == NORMALIZER_VERSION:
         return {"status": "duplicate", "snapshot_sha256": digest}
-    doc["quotes"].append({"snapshot_sha256": digest,
+    entry = {"snapshot_sha256": digest, "normalizer_version": NORMALIZER_VERSION,
                           "source": "Robinhood Trading MCP/get_equity_quotes",
                           "received_at_utc": _time(snapshot["received_at_utc"]).isoformat(),
                           "quotes": quotes, "missing_symbols": missing,
                           "reliability": "provider timestamp required for freshness; raw snapshot retained separately",
-                          "h140_use": "prospective observation only; not converted to completed OHLCV"})
+                          "h140_use": "prospective observation only; not converted to completed OHLCV"}
+    if previous is None:
+        doc["quotes"].append(entry)
+        result_status = "recorded"
+    else:
+        # Deterministic repair from the same immutable raw snapshot.
+        doc["quotes"][doc["quotes"].index(previous)] = entry
+        result_status = "reprocessed_with_new_normalizer"
     _write_store(journal_path, doc)
-    return {"status": "recorded", "snapshot_sha256": digest,
+    return {"status": result_status, "snapshot_sha256": digest,
             "quotes": len(quotes), "missing_symbols": missing}
 
 

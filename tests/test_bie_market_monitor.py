@@ -37,6 +37,36 @@ class MarketMonitorTests(unittest.TestCase):
         result = m.ingest_quote_snapshot(self.snapshot, self.journal)
         self.assertEqual("duplicate", result["status"])
 
+    def test_trade_quote_and_venue_timestamp_beat_later_historical_close(self):
+        payload = json.loads(self.snapshot.read_text())
+        payload["raw_quote_response"] = {"content": [{"text": json.dumps([
+            {"symbol": "META", "last_trade_price": "709.34",
+             "venue_last_trade_time": "2026-10-18T15:00:20Z"},
+            {"symbol": "META", "price": "736.72"},
+            {"symbol": "SPY", "mark_price": "690.10",
+             "updated_at": "2026-10-18T15:00:25Z"},
+        ])}]}
+        self.snapshot.write_text(json.dumps(payload))
+        m.ingest_quote_snapshot(self.snapshot, self.journal)
+        quotes = json.loads(self.journal.read_text())["quotes"][0]["quotes"]
+        meta = next(q for q in quotes if q["symbol"] == "META")
+        self.assertEqual(709.34, meta["price_usd"])
+        self.assertEqual("last_trade_price", meta["price_field"])
+        self.assertEqual("2026-10-18T15:00:20+00:00", meta["provider_timestamp_utc"])
+        self.assertEqual([], meta["warnings"])
+
+    def test_old_normalization_is_repaired_from_same_snapshot(self):
+        m.ingest_quote_snapshot(self.snapshot, self.journal)
+        doc = json.loads(self.journal.read_text())
+        doc["quotes"][0].pop("normalizer_version")
+        doc["quotes"][0]["quotes"] = [{"symbol": "META", "price_usd": 1}]
+        self.journal.write_text(json.dumps(doc))
+        result = m.ingest_quote_snapshot(self.snapshot, self.journal)
+        self.assertEqual("reprocessed_with_new_normalizer", result["status"])
+        repaired = json.loads(self.journal.read_text())["quotes"][0]
+        self.assertEqual(m.NORMALIZER_VERSION, repaired["normalizer_version"])
+        self.assertEqual(2, len(repaired["quotes"]))
+
     def _packet(self):
         return {"schema": "bie.h140.prospective-prediction.v1", "trade_action": "NO_TRADE_RESEARCH",
                 "symbol": "META", "instrument_type": "stock", "probability_up": 0.6,
