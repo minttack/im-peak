@@ -42,6 +42,25 @@ class ReadOnlyTest(unittest.TestCase):
         self.assertIn("symbols", diagnostic["fields"])
         self.assertNotIn("private value", str(diagnostic))
 
+    def test_nullable_unconstrained_list_items(self):
+        d = {"properties": {"symbols": {"anyOf": [
+            {"type": "array", "items": {}}, {"type": "null"}]}},
+            "required": ["symbols"]}
+        self.assertEqual(c.quote_arguments(d, ("SPY", "QQQ")),
+                         {"symbols": ["SPY", "QQQ"]})
+
+    def test_array_with_implicit_items(self):
+        d = {"properties": {"symbols": {"type": "array"}},
+             "required": ["symbols"]}
+        self.assertEqual(c.quote_arguments(d, ("SPY",)),
+                         {"symbols": ["SPY"]})
+
+    def test_rejects_incompatible_array_items(self):
+        d = {"properties": {"symbols": {"type": "array",
+                                        "items": {"type": "number"}}},
+             "required": ["symbols"]}
+        self.assertIsNone(c.quote_arguments(d, ("SPY",)))
+
     def test_schema_requirements_fail_closed(self):
         d = {"properties": {"symbols": {"type": "array", "items": {"type": "string"}},
                             "account_id": {"type": "string"}},
