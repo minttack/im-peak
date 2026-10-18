@@ -1,0 +1,24 @@
+name: BIE Robinhood read-only adapter checks
+on:
+  push:
+    paths:
+      - "bie_robinhood_connect.py"
+      - "tests/test_bie_robinhood_connect.py"
+      - ".github/workflows/test-bie-robinhood-readonly.yml"
+  pull_request:
+  workflow_dispatch:
+jobs:
+  safety-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Check syntax
+        run: python -m py_compile bie_robinhood_connect.py
+      - name: Run isolated safety tests without network or credentials
+        run: python -m unittest discover -s tests -p "test_bie_robinhood_connect.py" -v
