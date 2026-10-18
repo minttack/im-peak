@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "purpose": "Proposed controls for paper testing only; not connected to Robinhood",
+  "robinhood_trade_approvals_preference": "OFF",
+  "live_orders_enabled": false,
+  "paper_order_evaluation_enabled": true,
+  "starting_budget_usd": "20.00",
+  "daily_new_buy_limit_usd": "2.00",
+  "single_buy_limit_usd": "2.00",
+  "maximum_total_invested_usd": "20.00",
+  "maximum_quote_age_seconds": 120,
+  "permitted_assets": ["stock", "etf"],
+  "margin_enabled": false,
+  "options_enabled": false,
+  "short_selling_enabled": false
+}
