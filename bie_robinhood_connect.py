@@ -216,9 +216,27 @@ async def connect(symbols: tuple[str, ...], watch: bool) -> None:
     cb = BrowserCallback()
     cb.start()
     async def show_login(url: str) -> None:
-        print("Opening your browser for Robinhood login. Sign in yourself.")
-        if not webbrowser.open(url):
-            print("Could not open browser automatically; check default Windows browser.")
+        """Open OAuth locally, with a visible manual fallback for Windows."""
+        print("Opening Robinhood sign-in in your browser. Sign in yourself.", flush=True)
+        # Don't persist OAuth URLs, codes, cookies or tokens anywhere on disk.
+        try:
+            launched = bool(webbrowser.open(url, new=2, autoraise=True))
+        except Exception:
+            launched = False
+        if not launched:
+            try:
+                import os
+                if os.name == "nt":
+                    os.startfile(url)  # Windows default-browser fallback.
+                    launched = True
+            except (OSError, AttributeError):
+                pass
+        print("If no Robinhood tab appears, open Microsoft Edge or Chrome", flush=True)
+        print("and paste this sign-in address into the ADDRESS BAR on YOUR computer:", flush=True)
+        print(url, flush=True)
+        print("DO NOT SHARE the sign-in address, authorization codes, or tokens here.", flush=True)
+        if not launched:
+            print("Browser launch was not confirmed. Use the manual address above.", flush=True)
 
     async def finish_login():
         print("Waiting for Robinhood browser authorization (up to 5 minutes)...")
