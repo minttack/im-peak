@@ -94,9 +94,15 @@ def quote_arguments(input_schema: dict, symbols: tuple[str, ...]) -> dict | None
         for candidate in _schema_variants(spec):
             if name in ("symbols", "tickers") and candidate.get("type") == "array":
                 items = candidate.get("items")
-                if not isinstance(items, dict):
-                    continue
-                if any(item.get("type") == "string" for item in _schema_variants(items)):
+                # Robinhood's generated client declares symbols as None | list.
+                # Such schemas may leave list items unconstrained ({} or
+                # absent). We already validate symbols_from_text() locally and
+                # call ONLY the allowlisted, read-only equity quote tool.
+                if items is None or items is True or items == {}:
+                    return {name: list(symbols)}
+                if isinstance(items, dict) and any(
+                    item.get("type") == "string" for item in _schema_variants(items)
+                ):
                     return {name: list(symbols)}
             elif name in ("symbol", "ticker") and candidate.get("type") == "string":
                 return {name: symbols[0]}
