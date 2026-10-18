@@ -52,30 +52,78 @@ def status(state: str, detail: str = "") -> None:
     print(f"BIE ROBINHOOD: {state} {detail}", flush=True)
 
 
+def _schema_variants(spec: dict) -> list[dict]:
+    """Expand JSON-Schema nullable unions; never guess parameter names."""
+    if not isinstance(spec, dict):
+        return []
+    variants = [spec]
+    for key in ("anyOf", "oneOf"):
+        values = spec.get(key)
+        if isinstance(values, list):
+            variants.extend(item for item in values if isinstance(item, dict))
+    # A nullable union can also use type: ["array", "null"].
+    types = spec.get("type")
+    if isinstance(types, list) and "array" in types:
+        variants.append({**spec, "type": "array"})
+    if isinstance(types, list) and "string" in types:
+        variants.append({**spec, "type": "string"})
+    return variants
+
+
 def quote_arguments(input_schema: dict, symbols: tuple[str, ...]) -> dict | None:
-    """Only construct arguments for recognized, single-property quote schemas."""
+    """Accept simple & nullable JSON schema formats for READ-ONLY quote calls."""
     if not isinstance(input_schema, dict):
         return None
     props = input_schema.get("properties")
     required = input_schema.get("required", [])
     if not isinstance(props, dict) or not isinstance(required, list):
         return None
+    if not symbols or len(symbols) > 20:
+        return None
+    # Only the public quote field is supported. Reject any additional required
+    # arguments, including account numbers, to avoid malformed requests.
+    if any(field not in ("symbols", "tickers", "symbol", "ticker")
+           for field in required):
+        return None
     for name in ("symbols", "tickers", "symbol", "ticker"):
         spec = props.get(name)
         if not isinstance(spec, dict):
             continue
-        if any(key != name for key in required):
+        if any(field != name for field in required):
             continue
-        if name in ("symbols", "tickers"):
-            if spec.get("type") != "array":
-                continue
-            items = spec.get("items", {})
-            if not isinstance(items, dict) or items.get("type") != "string":
-                continue
-            return {name: list(symbols)}
-        if spec.get("type") == "string":
-            return {name: symbols[0]}
+        for candidate in _schema_variants(spec):
+            if name in ("symbols", "tickers") and candidate.get("type") == "array":
+                items = candidate.get("items")
+                if not isinstance(items, dict):
+                    continue
+                if any(item.get("type") == "string" for item in _schema_variants(items)):
+                    return {name: list(symbols)}
+            elif name in ("symbol", "ticker") and candidate.get("type") == "string":
+                return {name: symbols[0]}
     return None
+
+
+def safe_quote_schema_diagnostic(input_schema: dict) -> dict:
+    """Show the shape of a tool's *public parameter schema*, never account data."""
+    if not isinstance(input_schema, dict):
+        return {"schema_shape": "non-object"}
+    props = input_schema.get("properties", {})
+    if not isinstance(props, dict):
+        return {"schema_shape": "no-properties"}
+    result = {
+        "fields": sorted(str(k) for k in props)[:15],
+        "required": sorted(str(k) for k in input_schema.get("required", [])
+                           if isinstance(k, str))[:15]
+                    if isinstance(input_schema.get("required", []), list) else "unknown",
+    }
+    for name in ("symbols", "tickers", "symbol", "ticker"):
+        spec = props.get(name)
+        if isinstance(spec, dict):
+            result[name + "_types"] = [
+                str(v.get("type", "unknown")) for v in _schema_variants(spec)
+            ][:8]
+            break
+    return result
 
 
 class MemoryTokens:
@@ -208,6 +256,10 @@ async def connect(symbols: tuple[str, ...], watch: bool) -> None:
                     args = quote_arguments(quote.inputSchema, symbols) if quote else None
                     if args is None or QUOTE_TOOL not in READ_ONLY_ALLOWLIST:
                         status("READONLY_WAITING", "Quote input schema not recognized; no calls made")
+                        if quote:
+                            print("Quote parameter schema shape (no account info):",
+                                  json.dumps(safe_quote_schema_diagnostic(quote.inputSchema)),
+                                  flush=True)
                         await asyncio.sleep(300)
                         continue
                     try:
