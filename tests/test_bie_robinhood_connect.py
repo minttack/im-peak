@@ -17,6 +17,31 @@ class ReadOnlyTest(unittest.TestCase):
              "required": ["symbols"]}
         self.assertEqual(c.quote_arguments(d, ("SPY", "QQQ")), {"symbols": ["SPY", "QQQ"]})
 
+    def test_nullable_array_schema(self):
+        d = {"properties": {"symbols": {
+            "anyOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "null"}
+            ]}}, "required": ["symbols"]}
+        self.assertEqual(c.quote_arguments(d, ("SPY", "QQQ")),
+                         {"symbols": ["SPY", "QQQ"]})
+
+    def test_type_array_nullable_union(self):
+        d = {"properties": {"symbols": {
+            "type": ["array", "null"], "items": {"type": "string"}}},
+             "required": ["symbols"]}
+        self.assertEqual(c.quote_arguments(d, ("SPY",)), {"symbols": ["SPY"]})
+
+    def test_quote_diagnostics_no_secrets(self):
+        d = {"properties": {"symbols": {
+            "anyOf": [{"type": "array", "items": {"type": "string"}},
+                      {"type": "null"}],
+            "description": "OAuth bearer: private value is never displayed"}},
+            "required": ["symbols"]}
+        diagnostic = c.safe_quote_schema_diagnostic(d)
+        self.assertIn("symbols", diagnostic["fields"])
+        self.assertNotIn("private value", str(diagnostic))
+
     def test_schema_requirements_fail_closed(self):
         d = {"properties": {"symbols": {"type": "array", "items": {"type": "string"}},
                             "account_id": {"type": "string"}},
