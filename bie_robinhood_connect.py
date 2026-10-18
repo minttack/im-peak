@@ -132,6 +132,16 @@ def safe_quote_schema_diagnostic(input_schema: dict) -> dict:
     return result
 
 
+def fixed_readonly_quote_arguments(symbols: tuple[str, ...]) -> dict:
+    """Known Robinhood get_equity_quotes signature: {symbols: list[str]}.
+
+    The MCP server's *exposed JSON schema* varies between SDK versions,
+    but Robinhood's generated API client documents a list of symbols.
+    This builder is used exclusively with the hardcoded read-only tool.
+    """
+    return {"symbols": list(symbols_from_text(",".join(symbols)))}
+
+
 class MemoryTokens:
     """Token implementation created lazily to avoid SDK import during unit tests."""
 
@@ -277,20 +287,20 @@ async def connect(symbols: tuple[str, ...], watch: bool) -> None:
                     return
                 while True:
                     quote = tools.get(QUOTE_TOOL)
-                    args = quote_arguments(quote.inputSchema, symbols) if quote else None
-                    if args is None or QUOTE_TOOL not in READ_ONLY_ALLOWLIST:
-                        status("READONLY_WAITING", "Quote input schema not recognized; no calls made")
-                        if quote:
-                            print("Quote parameter schema shape (no account info):",
-                                  json.dumps(safe_quote_schema_diagnostic(quote.inputSchema)),
-                                  flush=True)
+                    if quote is None or QUOTE_TOOL not in READ_ONLY_ALLOWLIST:
+                        status("READONLY_WAITING", "get_equity_quotes unavailable; no calls made")
                         await asyncio.sleep(300)
                         continue
+                    # Robinhood's generated tool signature specifies symbols
+                    # as a list. Its advertised JSON schema is inconsistent
+                    # across versions, so use the known READ-ONLY call directly.
+                    args = fixed_readonly_quote_arguments(symbols)
                     try:
                         # HARDCODED exact quote tool; never invoke place_* or cancel_*.
                         result = await session.call_tool(QUOTE_TOOL, args)
                         if result.isError:
-                            status("READONLY_WAITING", "Robinhood quote request returned an error")
+                            status("READONLY_WAITING", "Robinhood rejected quote request; no snapshot saved")
+                            print("Quote request rejected by server. No trading tools were invoked.", flush=True)
                         else:
                             write_json(SNAPSHOT, {
                                 "source": "Robinhood Trading MCP",
