@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "status": "USER_REQUEST_RECORDED_NOT_ACTIVE",
+  "purpose": "Prepare $20 options-learning workflow; NOT a live trading authorization token",
+  "user_requested_total_cap_usd": "20.00",
+  "user_requested_trade_approvals": "OFF",
+  "user_requested_instruments": ["equities", "long_call", "long_put"],
+  "proposed_max_new_option_premium_plus_fees_per_trade_usd": "5.00",
+  "proposed_max_new_order_spend_per_day_usd": "5.00",
+  "existing_risk_policy_file": "BIE_RISK_POLICY.json",
+  "live_orders_enabled": false,
+  "broker_authenticated": false,
+  "order_sender_present": false,
+  "do_not_override_existing_emergency_stop": true,
+  "warning": "Request records user preference only. Does not verify $20 buying power, options approval or available finances. No actual orders permitted."
+}
